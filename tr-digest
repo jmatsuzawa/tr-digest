@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -x
 
 TRANSLATOR_NAME=unknown
 TRANSLATOR_MAIL=unknown
@@ -78,12 +78,8 @@ genpo() {
     FEED=http://blogs.gnome.org/commitdigest/feed/
     LATESTURL=`curl -s "$FEED" | xmlstarlet sel -t -c '/rss/channel/item[1]/link/text()'`
     INPUT=$LATESTURL
-  else
-    INPUT=`echo "$INPUT" | sed -e 's,^/,file:///,'`
-    if [ `expr "$INPUT" : 'http://blogs.gnome.org/commitdigest'` -eq 0 ]; then
-      INPUT=file://`realpath -e "$INPUT"` || exit 1
-    fi
-
+  elif [ `expr "$INPUT" : 'http://blogs.gnome.org/commitdigest'` -eq 0 ]; then
+    INPUT=file://`realpath -e "$INPUT"` || exit 1
   fi
 
   curl -S -s "$INPUT" > "$HTML" || exit 1
