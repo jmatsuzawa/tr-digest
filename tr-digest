@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/sh
 
 TRANSLATOR_NAME=unknown
 TRANSLATOR_MAIL=unknown
