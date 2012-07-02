@@ -1,0 +1,178 @@
+#!/bin/sh
+
+TRANSLATOR_NAME=unknown
+TRANSLATOR_MAIL=unknown
+AUTHOR_NAME="Frederic Peters" 
+AUTHOR_MAIL="fpeters@gnome.org"
+
+PO=ja.po
+HTML=digest.html
+HTML_JA=digest-ja.html
+RST_JA=digest-ja.rst
+
+MODE=po
+
+usage() {
+  CMD=`basename $0`
+  echo "Usage: ${CMD} [OPTIONS]"
+  echo "  -h       :display this help and exit"
+  echo "  -i INPUT :INPUT is the original html."
+  echo "            It may be the file path or the URL."
+  echo "            the default is the latest one."
+  echo "  -m MODE  :MODE may be 'po' or 'rst'"
+  echo "            use 'po' to generate the po-file."
+  echo "            use 'rst' to generate the reST-file."
+  echo "            the default is 'po'."
+  echo "  -q       :quiet..."
+}
+
+MESSAGE() {
+  echo "$@" >&2
+}
+
+
+l10n() {
+  sed -e '/^msgid ".*"$/ {
+    N
+    s/\(.*\)\n\(.*\)/\1<>\2/
+  }' |
+
+  sed -e '
+    s/^\(msgid "Issue \([1-9][0-9]*\)"<>\)msgstr ".*"$/\1msgstr "\2 号"/
+    s/^\(msgid "&raquo; Issue \([1-9][0-9]*\) GNOME Commit-Digest"<>\)msgstr ".*"$/\1msgstr "\&raquo; \2 号 GNOME コミットダイジェスト"/
+    s/^\(msgid "GNOME Commit-Digest"<>\)msgstr ".*"$/\1msgstr "GNOME コミットダイジェスト"/
+    s/^\(msgid "… for the curious in you"<>\)msgstr ".*"$/\1msgstr "… 興味のあるひとへ"/
+
+    /^msgid "\(January\|February\|March\|April\|May\|June\|July\|August\|September\|October\|November\|December\) \([1-9]\|[1-2][0-9]\|3[01]\), 20[1-9][0-9]/ {
+      s/^\(msgid "\([A-Za-z]\{1,\}\) \([1-9]\|[1-2][0-9]\|3[01]\), \(20[1-9][0-9]\)"<>\)msgstr ".*"$/\1msgstr "\4年\2月\3日"/
+      s/January月/1月/
+      s/February月/2月/
+      s/March月/3月/
+      s/April月/4月/
+      s/May月/5月/
+      s/June月/6月/
+      s/July月/7月/
+      s/August月/8月/
+      s/September月/9月/
+      s/October月/10月/
+      s/November月/11月/
+      s/December月/12月/
+    }
+    s/^\(msgid "This week…"<>\)msgstr ".*"$/\1msgstr "今週は…"/
+    s!^\(msgid "<placeholder-1/> \([1-9][0-9]*\) commits, in \([1-9][0-9]*\) projects, by \([1-9][0-9]*\) happy hackers (and \([1-9][0-9]*\) were translation commits)."<>\)msgstr ".*"$!\1msgstr "<placeholder-1/> \2 件のコミットが、\3 のプロジェクトで、\4 名のハッピーハッカーによってなされました (\5 件は翻訳のコミットです)。"!
+
+    s/^\(msgid "Top projects"<>\)msgstr ".*"$/\1msgstr "トッププロジェクト"/
+    s/^\(msgid "Project"<>\)msgstr ".*"$/\1msgstr "プロジェクト"/
+    s/^\(msgid "Commits"<>\)msgstr ".*"$/\1msgstr "コミット"/
+    s/^\(msgid "Top authors"<>\)msgstr ".*"$/\1msgstr "トップ作者"/
+    s/^\(msgid "Author"<>\)msgstr ".*"$/\1msgstr "作者"/
+    s/^\(msgid "Modules"<>\)msgstr ".*"$/\1msgstr "モジュール"/
+  ' |
+  sed -e 's/^\(msgid ".*"\)<>\(msgstr ".*"\)$/\1\
+\2/'
+
+}
+
+genpo() {
+  if [ x"$INPUT" = x ]; then
+    FEED=http://blogs.gnome.org/commitdigest/feed/
+    LATESTURL=`curl -s "$FEED" | xmlstarlet sel -t -c '/rss/channel/item[1]/link/text()'`
+    INPUT=$LATESTURL
+  else
+    INPUT=`echo "$INPUT" | sed -e 's,^/,file:///,'`
+    if [ `expr "$INPUT" : 'http://blogs.gnome.org/commitdigest'` -eq 0 ]; then
+      INPUT=file://`realpath -e "$INPUT"` || exit 1
+    fi
+
+  fi
+
+  curl -S -s "$INPUT" > "$HTML" || exit 1
+  MESSAGE "Generated the original html: ${HTML}"
+  xml2po "$HTML" | l10n > "$PO"
+  MESSAGE "Generated the po: ${PO}"
+}
+
+genrst() {
+  if [ ! -r "$PO" ]; then
+    echo "Could not read '${PO}'." >&2
+    exit 1
+  fi
+  if [ ! -r "$HTML" ]; then
+    echo "Could not read '${HTML}'." >&2
+    exit 1
+  fi
+  xml2po -e -p "$PO" -a "$HTML"  > "$HTML_JA"
+  MESSAGE "Generated the translated html: ${HTML_JA}"
+  cat "$HTML_JA" | pandoc -f html -t rst | sed -e '/^Posted by fredp$/,$d' >"$RST_JA"
+  MESSAGE "Generated the translated reST: ${RST_JA}"
+  echo "Assembled by \`${AUTHOR_NAME} <${AUTHOR_MAIL}>\`_" >> "$RST_JA"
+  echo >> "$RST_JA"
+  echo "Translated by \`${TRANSLATOR_NAME} <${TRANSLATOR_MAIL}>\`_" >> "$RST_JA"
+  echo >> "$RST_JA"
+  echo 'This work is licensed under a `Creative Commons Attribution-ShareAlike' >> "$RST_JA"
+  echo '3.0 Unported <http://creativecommons.org/licenses/by-sa/3.0/>`_.' >> "$RST_JA"
+  echo >> "$RST_JA"
+  _url=`sed -n -e 's,^\`\([1-9][0-9]*\) 号 <\(http://blogs.gnome.org/commitdigest.*issue-\1/\)>\`_$,\2,p' "$RST_JA"`
+  echo "原文は ${_url} です。" >> "$RST_JA"
+
+}
+
+
+OPT=`getopt hi:m:p:qt:x: "$@"`
+if [ $? -ne 0 ]; then
+  exit 1
+fi
+eval set -- "$OPT"
+while :; do
+  case "$1" in
+    -h)
+      usage
+      exit 0
+      ;;
+    -i)
+      INPUT=$2
+      shift
+      ;;
+    -m)
+      MODE=$2
+      shift
+      ;;
+    -p)
+      PO=$2
+      shift
+      ;;
+    -q)
+      MESSAGE() {
+        :
+      }
+      ;;
+    -t)
+      POT=$2
+      shift
+      ;;
+    -x)
+      HTML=$2
+      shift
+      ;;
+    --)
+      break
+      ;;
+    *)
+      usage >&2
+      exit 1
+  esac
+  shift
+done
+
+case "$MODE" in
+  po)
+    genpo
+    ;;
+  rst)
+    genrst
+    ;;
+  *)
+    usage >&2
+    exit 1
+esac
+

@@ -1,0 +1,18 @@
+License: GPLv2+
+
+Usage: tr-digest [OPTIONS]
+  -h       :display this help and exit
+  -i INPUT :INPUT is the original html.
+            It may be the file path or the URL.
+            the default is the latest one.
+  -m MODE  :MODE may be 'po' or 'rst'
+            use 'po' to generate the po-file.
+            use 'rst' to generate the reST-file.
+            the default is 'po'.
+  -q       :quiet...
+
+Require the following commands:
+  curl
+  pandoc (>=1.9)
+  xml2po
+  xmlstarlet
